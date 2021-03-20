@@ -87,15 +87,19 @@ class Nightscout(object):
             'values': [],
     }
     offset = None
+    offset_sgv = None
     for e in sorted(entries, key=lambda x: x['dateString']):
         ots = int(datetime.timestamp(dateutil.parser.parse(e['dateString'])))
         if offset is None:
             ts = ots
+            sgv = e['sgv']
         else:
             ts = ots - offset
+            sgv = e['sgv'] - offset_sgv
         glucose['index'].append(ts)
-        glucose['values'].append(e['sgv'])
+        glucose['values'].append(sgv)
         offset = ots
+        offset_sgv = e['sgv']
     ret['timelines'].append(glucose)
 
     basal = []
