@@ -81,6 +81,12 @@ class Nightscout(object):
                 return ret['basal_rate_schedule']['values'][i]
         return ret['basal_rate_schedule']['values'][-1]
 
+    def encode(series):
+        o = 0
+        for i, v in enumerate(series):
+            series[i] -= o
+            o = v
+
     glucose = {
             'type': 'glucose',
             'index': [],
@@ -96,17 +102,11 @@ class Nightscout(object):
         min_dt = min(min_dt or dt, dt)
         max_dt = min(max_dt or dt, dt)
         ots = int(datetime.timestamp(dt))
-        if offset is None:
-            ts = ots
-            sgv = e['sgv']
-        else:
-            ts = ots - offset
-            sgv = e['sgv'] - offset_sgv
-        glucose['index'].append(ts)
-        glucose['values'].append(sgv)
-        offset = ots
-        offset_sgv = e['sgv']
+        glucose['index'].append(ots)
+        glucose['values'].append(e['sgv'])
     print('MIN', min_dt, 'MAX', max_dt)
+    encode(glucose['index'])
+    encode(glucose['values'])
     ret['timelines'].append(glucose)
 
     basal = []
@@ -144,21 +144,17 @@ class Nightscout(object):
     active_until = None
     for ts, rate, duration in basal:
         ots = ts
-        if offset is None:
-            if duration == 0:
-                continue
-            offset = ts
-        else:
-            ts = ots - offset
 
         if duration == 0:
-            delta = ots - basal_timeline['ots'][-1]
+            if not basal_timeline['index']:
+                    continue
+            delta = ots - basal_timeline['index'][-1]
             basal_timeline['durations'][-1] = delta
             active_until = None
             continue
 
         if active_until and active_until > ots:
-            pts = basal_timeline['ots'][-1]
+            pts = basal_timeline['index'][-1]
             delta = ots - pts
 
             print(ots, ts, rate, duration)
@@ -174,14 +170,14 @@ class Nightscout(object):
         if len(basal_timeline['index']) and ts == basal_timeline['index'][-1]:
             print('tweak duplicate basal ts', ts)
             ts += 1
-        basal_timeline['index'].append(ts)
+        basal_timeline['index'].append(ots)
         basal_timeline['values'].append(rate)
         basal_timeline['durations'].append(duration)
-        basal_timeline['ots'].append(ots)
         active_until = ots + duration
-        offset = ots
 
-    del basal_timeline['ots']
+    encode(basal_timeline['index'])
+    encode(basal_timeline['values'])
+    encode(basal_timeline['durations'])
     ret['timelines'].append(basal_timeline)
 
     bolus_timeline = {
@@ -193,17 +189,14 @@ class Nightscout(object):
     offset = None
     for ts, units in bolus:
         ots = ts
-        if offset is None:
-            offset = ts
-        else:
-            ts = ots - offset
-        if len(bolus_timeline['index']) and ts == bolus_timeline['index'][-1]:
-            print('tweak duplicate bolus ts', ots, ts)
-            ts += 1
-        bolus_timeline['index'].append(ts)
+        if bolus_timeline['index'] and ts == bolus_timeline['index'][-1]:
+            print('drop duplicate bolus ts', ts)
+            continue
+        bolus_timeline['index'].append(ots)
         bolus_timeline['values'].append(units)
-        offset = ots
 
+    encode(bolus_timeline['index'])
+    encode(bolus_timeline['values'])
     ret['timelines'].append(bolus_timeline)
 
     for absorption, items in carbs.items():
@@ -216,16 +209,13 @@ class Nightscout(object):
         offset = None
         for ts, amount in items:
             ots = ts
-            if offset is None:
-                offset = ts
-            else:
-                ts = ots - offset
-            if len(carb_timeline['index']) and ts == carb_timeline['index'][-1]:
-                print('tweak duplicate carb ts', ts)
-                ts += 1
-            carb_timeline['index'].append(ts)
+            #if len(carb_timeline['index']) and ts == carb_timeline['index'][-1]:
+            #    print('tweak duplicate carb ts', ts)
+            #    ts += 1
+            carb_timeline['index'].append(ots)
             carb_timeline['values'].append(amount)
-            offset = ots
+        encode(carb_timeline['index'])
+        encode(carb_timeline['values'])
         ret['timelines'].append(carb_timeline)
 
     # pprint(ret)
