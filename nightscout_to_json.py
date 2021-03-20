@@ -78,14 +78,22 @@ class Nightscout(object):
         minutes = hour * 60
         for i, v in enumerate(ret['basal_rate_schedule']['index']):
             if v >= minutes:
-                return ret['basal_rate_schedule']['values'][i]
-        return ret['basal_rate_schedule']['values'][-1]
+                return ret['basal_rate_schedule']['values'][i] * 1000
+        return ret['basal_rate_schedule']['values'][-1] * 1000
 
     def encode(series):
         o = 0
         for i, v in enumerate(series):
             series[i] -= o
             o = v
+
+    basal_default_timeline = {
+            'type': 'basal',
+            'parameters': ret['basal_insulin_parameters'],
+            'index': [],
+            'values': [],
+            'durations': [],
+    }
 
     glucose = {
             'type': 'glucose',
@@ -98,16 +106,27 @@ class Nightscout(object):
     offset_sgv = None
     for e in sorted(entries, key=lambda x: x['dateString']):
         dt = dateutil.parser.parse(e['dateString'])
+        lt = dt.astimezone(tz)
         # print(e['dateString'], dt)
         min_dt = min(min_dt or dt, dt)
         max_dt = min(max_dt or dt, dt)
         ots = int(datetime.timestamp(dt))
         glucose['index'].append(ots)
         glucose['values'].append(e['sgv'])
+
+        if len(glucose['index']) >= 2:
+            default_basal = lookup_basal(lt.hour)
+            basal_default_timeline['index'].append(glucose['index'][-2])
+            basal_default_timeline['values'].append(default_basal)
+            basal_default_timeline['durations'].append(ots - glucose['index'][-2])
     print('MIN', min_dt, 'MAX', max_dt)
     encode(glucose['index'])
     encode(glucose['values'])
     ret['timelines'].append(glucose)
+    encode(basal_default_timeline['index'])
+    encode(basal_default_timeline['values'])
+    encode(basal_default_timeline['durations'])
+    ret['timelines'].append(basal_default_timeline)
 
     basal = []
     bolus = []
@@ -120,7 +139,7 @@ class Nightscout(object):
            # if the temp basal is longer than the schedule,
            # needs to split up in 30 minute intervals.
            default_basal = lookup_basal(lt.hour)
-           delta = t['rate'] - default_basal
+           delta = 1000*t['rate'] - default_basal
            # print(dt, lt, t['rate'], default_basal, delta)
            basal.append((ts, delta, t['duration']*60))
         elif t['eventType'] == 'Correction Bolus':
