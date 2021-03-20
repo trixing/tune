@@ -86,10 +86,16 @@ class Nightscout(object):
             'index': [],
             'values': [],
     }
+    min_dt = None
+    max_dt = None
     offset = None
     offset_sgv = None
     for e in sorted(entries, key=lambda x: x['dateString']):
-        ots = int(datetime.timestamp(dateutil.parser.parse(e['dateString'])))
+        dt = dateutil.parser.parse(e['dateString'])
+        # print(e['dateString'], dt)
+        min_dt = min(min_dt or dt, dt)
+        max_dt = min(max_dt or dt, dt)
+        ots = int(datetime.timestamp(dt))
         if offset is None:
             ts = ots
             sgv = e['sgv']
@@ -100,6 +106,7 @@ class Nightscout(object):
         glucose['values'].append(sgv)
         offset = ots
         offset_sgv = e['sgv']
+    print('MIN', min_dt, 'MAX', max_dt)
     ret['timelines'].append(glucose)
 
     basal = []
@@ -108,7 +115,7 @@ class Nightscout(object):
     for t in sorted(treatments, key=lambda x: x['created_at']):
         dt = dateutil.parser.parse(t['created_at'])
         lt = dt.astimezone(tz)
-        ts = int(datetime.timestamp(dateutil.parser.parse(t['created_at'])))
+        ts = int(datetime.timestamp(dt))
         if t['eventType'] == 'Temp Basal':
            # if the temp basal is longer than the schedule,
            # needs to split up in 30 minute intervals.
@@ -144,7 +151,6 @@ class Nightscout(object):
         else:
             ts = ots - offset
 
-        print(ots, ts, rate, duration)
         if duration == 0:
             delta = ots - basal_timeline['ots'][-1]
             basal_timeline['durations'][-1] = delta
@@ -155,6 +161,7 @@ class Nightscout(object):
             pts = basal_timeline['ots'][-1]
             delta = ots - pts
 
+            print(ots, ts, rate, duration)
             if rate == basal_timeline['values'][-1]:
                 basal_timeline['durations'][-1] += delta
                 active_until += delta 
@@ -247,11 +254,12 @@ if __name__ == '__main__':
 
   profile = j.get('p') or dl.download('profile')
   tz = profile[0]['store']['Default']['timezone']
-  today = today.replace(tzinfo=pytz.timezone(tz))
+  #today = today.replace(tzinfo=pytz.timezone(tz))
+  today = today.astimezone(pytz.timezone(tz))
   startdate = today - timedelta(days=days + 1)
   enddate = startdate + timedelta(days=days) 
-  startdate = startdate.isoformat()
-  enddate = enddate.isoformat()
+  startdate = startdate.astimezone(pytz.utc).isoformat()
+  enddate = enddate.astimezone(pytz.utc).isoformat()
   print(startdate, enddate)
 
   treatments = j.get('t') or dl.download(
