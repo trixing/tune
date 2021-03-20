@@ -52,8 +52,8 @@ class Nightscout(object):
             'timezone': ps['timezone'],
             'minimum_time_interval': 3600,
             'maximum_schedule_item_count': 24,
-            'allowed_basal_rates': [n/10.0 for n in range(1, 20)],
-            'tuning_limit': 0.4,
+        #    'allowed_basal_rates': [n/10.0 for n in range(1, 20)],
+        #    'tuning_limit': 0.4,
             'basal_insulin_parameters': {
                 # +- Fiasp, not sure about duration
                 'delay': 8,
@@ -88,13 +88,14 @@ class Nightscout(object):
     }
     offset = None
     for e in sorted(entries, key=lambda x: x['dateString']):
-        ts = int(datetime.timestamp(dateutil.parser.parse(e['dateString'])))
+        ots = int(datetime.timestamp(dateutil.parser.parse(e['dateString'])))
         if offset is None:
-            offset = ts
+            ts = ots
         else:
-            ts = ts - offset
+            ts = ots - offset
         glucose['index'].append(ts)
         glucose['values'].append(e['sgv'])
+        offset = ots
     ret['timelines'].append(glucose)
 
     basal = []
@@ -126,6 +127,7 @@ class Nightscout(object):
             'index': [],
             'values': [],
             'durations': [],
+            'ots': [],
     }
     offset = None
     active_until = None
@@ -136,23 +138,18 @@ class Nightscout(object):
                 continue
             offset = ts
         else:
-            ts = ts - offset
+            ts = ots - offset
 
         print(ots, ts, rate, duration)
         if duration == 0:
-            d = basal_timeline['durations'][-1]
-            delta = ts - basal_timeline['index'][-1]
-            if delta < 0:
-                delta = ots -  basal_timeline['index'][-1]
+            delta = ots - basal_timeline['ots'][-1]
             basal_timeline['durations'][-1] = delta
             active_until = None
             continue
 
         if active_until and active_until > ots:
-            pts = basal_timeline['index'][-1]
-            delta = ts - pts
-            if delta < 0:
-                delta = ots - pts
+            pts = basal_timeline['ots'][-1]
+            delta = ots - pts
 
             if rate == basal_timeline['values'][-1]:
                 basal_timeline['durations'][-1] += delta
@@ -169,8 +166,11 @@ class Nightscout(object):
         basal_timeline['index'].append(ts)
         basal_timeline['values'].append(rate)
         basal_timeline['durations'].append(duration)
+        basal_timeline['ots'].append(ots)
         active_until = ots + duration
+        offset = ots
 
+    del basal_timeline['ots']
     ret['timelines'].append(basal_timeline)
 
     bolus_timeline = {
@@ -185,12 +185,13 @@ class Nightscout(object):
         if offset is None:
             offset = ts
         else:
-            ts = ts - offset
+            ts = ots - offset
         if len(bolus_timeline['index']) and ts == bolus_timeline['index'][-1]:
             print('tweak duplicate bolus ts', ots, ts)
             ts += 1
         bolus_timeline['index'].append(ts)
         bolus_timeline['values'].append(units)
+        offset = ots
 
     ret['timelines'].append(bolus_timeline)
 
@@ -203,15 +204,17 @@ class Nightscout(object):
         }
         offset = None
         for ts, amount in items:
+            ots = ts
             if offset is None:
                 offset = ts
             else:
-                ts = ts - offset
+                ts = ots - offset
             if len(carb_timeline['index']) and ts == carb_timeline['index'][-1]:
                 print('tweak duplicate carb ts', ts)
                 ts += 1
             carb_timeline['index'].append(ts)
             carb_timeline['values'].append(amount)
+            offset = ots
         ret['timelines'].append(carb_timeline)
 
     # pprint(ret)

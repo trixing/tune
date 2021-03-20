@@ -40,17 +40,22 @@ def resample(frame):
     first, last = None, None
 
     for col in frame.timeseries:
+        print(col.ctype)
         index = col.series.index
         if first is None:
             first = index[0]
             last = index[len(index) - 1]
+            print('  ', first, last)
             continue
 
         if index[0] < first:
             first = index[0]
+            print('  ', first)
         if index[len(index) - 1] > last:
             last = index[len(index) - 1]
+            print('  ', last)
 
+    print('FIRST', 'LAST', first, last)
     pad = pd.Series(0, pd.DatetimeIndex([first, last]))
 
     timeseries = []
@@ -417,6 +422,7 @@ def fit(request, hyper_params=default_hyper_params, nperiod=288):
         basal = basals[hour]
         insulin_sensitivity = insulin_sensitivities[hour]
         carb_ratio = carb_ratios[hour]
+        print(basal, insulin_sensitivity, carb_ratio)
         return insulin_sensitivity * (carbs / carb_ratio - insulin + basal)
 
     if bounds is not None:
