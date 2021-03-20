@@ -144,8 +144,7 @@ class Request:
             if len(index) == 0:
                 continue
             if "durations" in timeline:
-                #durations = undelta(timeline["durations"])
-                durations = np.array(timeline["durations"])
+                durations = undelta(timeline["durations"])
                 index, values = resample(index, values, durations)
             index = pd.to_datetime(index, unit="s", utc=True)
             index = index.tz_convert(timezone)
