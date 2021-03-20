@@ -521,7 +521,9 @@ def fit(request, hyper_params=default_hyper_params, nperiod=288):
             # snapping up when values are (much) closer.
             if j == 0 and rate != allowed[0]:
                 basal_rate_schedule[i] = 0.0
-            elif j >= len(basal_rate_schedule) or rate != allowed[j]:
+            elif j >= len(allowed):
+                basal_rate_schedule[i] = allowed[j - 1]
+            elif rate != allowed[j]:
                 basal_rate_schedule[i] = allowed[j - 1]
 
     def make_schedule(index, schedule):
@@ -555,7 +557,7 @@ def main():
 
     args = parser.parse_args()
 
-    input = args.file
+    input = open(args.file)
     if input is None:
         input = sys.stdin
     payload = json.load(input)
