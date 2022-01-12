@@ -196,9 +196,12 @@ default_hyper_params = {
 
 def make_frame(request, hyper_params=default_hyper_params):
     frame = resample(request)
+    print('resample', frame)
     frame = make_pandas_frame(frame)
+    print('pandas', frame)
 
     frame["delta"] = frame["glucose"] - frame["glucose"].shift(1)
+    print('delta', frame['delta'])
     maxdelta = hyper_params.get("maxdelta", 10)
     delta = frame["delta"]
     frame.loc[(delta > maxdelta) | (delta < -maxdelta), "delta"] = hyper_params.get(
@@ -212,6 +215,7 @@ def make_frame(request, hyper_params=default_hyper_params):
             .mean()
         )
 
+    print('delta33', frame['delta'])
     win = hyper_params.get("rolling_window")
     if win > 1:
         # Compute endpoint deltas directly so we have more data points to
@@ -229,14 +233,18 @@ def make_frame(request, hyper_params=default_hyper_params):
         & np.isfinite(frame["insulin"])
     )
     frame = frame[rows]
-
+    print('finite', frame)
+    insulin_quantile = frame["insulin"].quantile(0.90)
+    print('iq', insulin_quantile)
     # Filter carb and insulin outliers.
-    frame = frame[(frame["insulin"] > 0) & (frame["insulin"] <= frame["insulin"].quantile(0.90))]
+    # frame = frame[(frame["insulin"] > 0) & (frame["insulin"] <= insulin_quantile)]
+    # print('filter insulin', frame)
 #        (frame["insulin"] >= frame["insulin"].quantile(0.05))
 #        & (frame["insulin"] <= frame["insulin"].quantile(0.85))
 #    ]
     carb_quantile = frame[frame["carb"] > 0.0]["carb"].quantile(0.90)
-    frame = frame[frame["carb"] <= carb_quantile]
+    print('cq', carb_quantile)
+    #frame = frame[frame["carb"] <= carb_quantile]
 
     return frame
 
@@ -376,6 +384,9 @@ def fit(request, hyper_params=default_hyper_params, nperiod=288):
         init_carb_ratio_params = 15.*np.ones(24)
 
     if request.basal_rate_schedule is not None:
+        print(
+            request.basal_rate_schedule.index,
+            request.basal_rate_schedule.values)
         init_basal_rate_params = attribute_parameters(
             basal_insulin_curve,
             request.basal_rate_schedule.index,
